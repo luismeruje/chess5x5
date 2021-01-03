@@ -1,0 +1,21 @@
+Start game
+Black
+White played b1c3
+b5c3White played b2c3
+b4c3
+White played d2c3
+e4e3
+White played c3d4
+d5d4
+White played a2a3
+c5b4
+White played d1d2
+b4d2
+White played c1d2
+e3d2
+White played e1d1
+d4a1
+White played d1d2
+a5d5
+White played d2e3
+a1c1

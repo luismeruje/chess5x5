@@ -1,0 +1,21 @@
+Start game
+White
+b1c3Black played b5c3
+b2c3
+Black played b4c3
+d2c3
+Black played e4e3
+c3e4Illegal move
+c3d4
+Black played d5d4
+a2a3
+Black played c5b4
+d1d2
+Black played b4d2
+c1d2
+Black played e3d2
+e1d1Black played d4a1
+d1d2
+Black played a5d5
+d2e3
+Black played a1c1
