@@ -1,17 +1,25 @@
 import chess
+import chess.svg
 import random 
 import time
 import os
+from PyQt5.QtSvg import QSvgWidget
+from PyQt5.QtWidgets import QApplication, QWidget
+import sys
+import multiprocessing as mp
+import _thread 
 
 #Time between attempts to read file, in seconds
 FILE_POLLING_INTERVAL = 2
 MAX_INFRACTIONS = 3
+GUI_ACTIVE = True
+
 #Not implemented yet
 
 #Time limit per player in seconds
 #TIME_LIMIT= 120
 #TIME_LIMIT_ACTIVE = True
-#GUI_ACTIVE = FALSE
+
 """ 
 #Use SVG render to show GUI
 #Have to deal with draws
@@ -117,7 +125,7 @@ def process_move(file, file_position, board):
 
     return (file,chess.Move.uci(move), disqualified)
 
-def game_loop(whites_file, blacks_file, board):
+def game_loop(whites_file, blacks_file, board, GUI_enabled = False, window = None):
     #I think I can do this without the tell's everywhere
     whites_file.write('White' + os.linesep)
     whites_file.flush()
@@ -130,7 +138,10 @@ def game_loop(whites_file, blacks_file, board):
     game_finished = False
     while not game_finished:
         (whites_file,move,disqualified) = process_move(whites_file, whites_file_position, board)
-        print(board)
+        
+        if GUI_enabled:
+            window.replaceBoard(board)
+            window.reload()
         blacks_file.write('White played ' + str(move) + os.linesep)
         blacks_file.flush()
         blacks_file_position = blacks_file.tell()
@@ -143,7 +154,11 @@ def game_loop(whites_file, blacks_file, board):
             game_finished = True
             break
         (blacks_file,move,disqualified) = process_move(blacks_file, blacks_file_position, board)
-        print(board)
+        if GUI_enabled:
+            window.replaceBoard(board)
+            window.reload()
+        else:
+            print(board)
         whites_file.write('Black played ' + str(move) + os.linesep)
         whites_file.flush()
         whites_file_position = whites_file.tell()
@@ -157,12 +172,60 @@ def game_loop(whites_file, blacks_file, board):
         
 
 
-def main():
+# https://stackoverflow.com/questions/61439815/how-to-display-an-svg-image-in-python
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setGeometry(100, 100, 850, 850)
+
+        self.widgetSvg = QSvgWidget(parent=self)
+        self.widgetSvg.setGeometry(10, 10, 800, 800)
+
+        self.board=chess.Board()#'8/8/8/rnbqk3/ppppp3/8/PPPPP3/RNBQK3')
+
+        self.boardSvg = chess.svg.board(self.board).encode("UTF-8")
+        self.widgetSvg.load(self.boardSvg)
+    
+    def reload(self):
+         self.boardSvg = chess.svg.board(self.board).encode("UTF-8")
+         self.widgetSvg.load(self.boardSvg) 
+        
+    def replaceBoard(self, board):
+        self.board = board
+
+
+def run_GUI(app, window):
+    window.show()
+
+    app.exec_()
+
+def run_game(GUI_enabled=False, window=None):
     player1_file_name = 'player1.txt'
     player2_file_name = 'player2.txt'
     (whites_file,blacks_file, board) = setup_new_game(player1_file_name, player2_file_name)
-    winner = game_loop(whites_file, blacks_file, board)
+    if GUI_enabled:
+        window.replaceBoard(board)
+        window.reload()
+    winner = game_loop(whites_file, blacks_file, board, GUI_enabled, window)
     print(winner + ' wins')
+
+def main():
+
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    if GUI_ACTIVE:
+        #QApplication doesn't like running on non-main Thread, so move game backend instead to different thread
+        try:
+            _thread.start_new_thread(run_game, (True,window) )
+        except Exception as e:
+            print("Error: unable to start thread")
+            print(e)
+        run_GUI(app, window)
+    else:
+        run_game()
+    
+
 
 if __name__ == "__main__":
     main()
