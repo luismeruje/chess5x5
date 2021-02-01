@@ -25,8 +25,8 @@ class FileClient:
     #Receives moves in UCI format. Returns move played by opponent also in UCI.
     def play_move(self,move):
         self.write_move(move)
-        reply = self.process_reply()
-        return reply
+        (reply, illegal, winner) = self.process_reply()
+        return (reply, illegal, winner)
 
     def get_opponent_move(self):
         return self.process_reply()
@@ -34,6 +34,8 @@ class FileClient:
     def process_reply(self):
         reply_read = False
         file_position = self.file.tell()
+        illegal = False
+        winner = None
         while not reply_read:
             self.file = manager.reload_reader(self.file)
             reply = self.file.readline()
@@ -41,8 +43,13 @@ class FileClient:
                 self.file.seek(file_position)
                 time.sleep(self.FILE_POLLING_INTERVAL)
             else:
-                if not "Illegal move" in reply:
+                if "Illegal move" in reply:
+                    illegal = True
+                elif 'win' in reply:
+                    winner = reply.split(' ')[0]
+                else:
                     reply = reply.split(' ')[2]
                     reply = manager.cleanup_move_string(reply)
+                
                 reply_read = True
-        return reply
+        return (reply, illegal, winner)

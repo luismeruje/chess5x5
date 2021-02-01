@@ -9,8 +9,13 @@ import sys
 import multiprocessing as mp
 import _thread 
 
+#Based on: https://stackabuse.com/minimax-and-alpha-beta-pruning-in-python/
+#Try to order moves on how likely they are to be good for best alpha-beta pruning improvement
+# https://www.youtube.com/watch?v=l-hh51ncgDI
+
+
 #Time between attempts to read file, in seconds
-FILE_POLLING_INTERVAL = 2
+FILE_POLLING_INTERVAL = 1
 MAX_INFRACTIONS = 3
 GUI_ACTIVE = True
 
@@ -68,10 +73,15 @@ def is_move_legal(move,board):
     pawn_promotion_rank5 = ["a5b","b5b","c5b","d5b","e5b","a5n","b5n","c5n","d5n","e5n","a5r","b5r","c5r","d5r","e5r","a5q","b5q","c5q","d5q","e5q"]
     move = move.uci()
     print('Testing move: ', move)
-    if (chess.Move.from_uci(move) in board.legal_moves) and (not move in pawn_double__moves) and (not move in castling) and is_move_within_5x5_borders(move):
-        return True
-    #Check if pawn
-    elif (move[-3:] in pawn_promotion_rank5) and (chess.Move.from_uci(move[:4]) in board.legal_moves):
+    if board.piece_at(chess.SQUARES[chess.SQUARE_NAMES.index(move[:2])]).symbol() == 'P':
+        if (chess.Move.from_uci(move) in board.legal_moves) and (not move in pawn_double__moves) and is_move_within_5x5_borders(move):
+            return True
+        #Check if pawn
+        elif (move[-3:] in pawn_promotion_rank5) and (chess.Move.from_uci(move[:4]) in board.legal_moves):
+            return True
+        else:
+            return False
+    elif (chess.Move.from_uci(move) in board.legal_moves) and (not move in castling) and is_move_within_5x5_borders(move):
         return True
     else:
         return False
@@ -93,6 +103,16 @@ def is_checkmate(board):
         return True
     else:
         return False
+
+def is_draw(board):
+    if board.is_game_over(claim_draw=True):
+        return True
+    else:
+        possible_moves = board.legal_moves
+        for move in possible_moves:
+            if is_move_within_5x5_borders(move.uci()):
+                return False
+    return True
 
 def process_move(file, file_position, board):
     move_processed = False
@@ -153,6 +173,10 @@ def game_loop(whites_file, blacks_file, board, GUI_enabled = False, window = Non
             winner = 'Black'
             game_finished = True
             break
+        elif is_draw(board):
+            winner = None
+            game_finished = True
+            break
         (blacks_file,move,disqualified) = process_move(blacks_file, blacks_file_position, board)
         if GUI_enabled:
             window.replaceBoard(board)
@@ -168,7 +192,10 @@ def game_loop(whites_file, blacks_file, board, GUI_enabled = False, window = Non
         elif disqualified:
             winner = 'White'
             game_finished = True
-    return winner
+        elif is_draw(board):
+            winner = None
+            game_finished = True
+    return (winner, whites_file, blacks_file)
         
 
 
@@ -207,15 +234,20 @@ def run_game(GUI_enabled=False, window=None):
     if GUI_enabled:
         window.replaceBoard(board)
         window.reload()
-    winner = game_loop(whites_file, blacks_file, board, GUI_enabled, window)
-    print(winner + ' wins')
+    (winner, whites_file, blacks_file) = game_loop(whites_file, blacks_file, board, GUI_enabled, window)
+    print(str(winner) + ' wins')
+    whites_file.write(str(winner) + ' wins' + os.linesep)
+    whites_file.flush()
+    blacks_file.write(str(winner) + ' wins' + os.linesep)
+    blacks_file.flush()
+    whites_file.close()
+    blacks_file.close()
 
 def main():
-
     app = QApplication(sys.argv)
     window = MainWindow()
     if GUI_ACTIVE:
-        #QApplication doesn't like running on non-main Thread, so move game backend instead to different thread
+        #QApplication doesn't like running on non-main Thread, so run game backend in different thread instead
         try:
             _thread.start_new_thread(run_game, (True,window) )
         except Exception as e:
