@@ -19,7 +19,7 @@ NR_GAMES = 10
 FILE_POLLING_INTERVAL = 0.5
 MAX_INFRACTIONS = 3
 GUI_ACTIVE = True
-
+PAUSE_BETWEEN_GAMES = True
 #Not implemented yet
 
 #Time limit per player in seconds
@@ -317,7 +317,9 @@ def run_game(GUI_enabled=False, window=None, nr_games=1):
         blacks_file.close()
         os.rename(player1_file_name, player1_file_name + 'game-' + str(game_nr) + '.txt')
         os.rename(player2_file_name, player2_file_name + 'game-' + str(game_nr) + '.txt')
-        input('Press any key for next game...')
+        if PAUSE_BETWEEN_GAMES:
+            input('Press any key for next game...')
+
 def main():
     app = QApplication(sys.argv)
     window = MainWindow()
