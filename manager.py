@@ -15,7 +15,8 @@ import _thread
 
 
 #Time between attempts to read file, in seconds
-FILE_POLLING_INTERVAL = 1
+NR_GAMES = 10
+FILE_POLLING_INTERVAL = 0.5
 MAX_INFRACTIONS = 3
 GUI_ACTIVE = True
 
@@ -58,11 +59,12 @@ def setup_new_game(player1_file_name,player2_file_name):
     player2_file.flush()
     
     board=chess.Board('8/8/8/rnbqk3/ppppp3/8/PPPPP3/RNBQK3')
-    print(board)
+    if not GUI_ACTIVE:
+        print(board)
     if player1_color == 'White':
-        return (player1_file, player2_file, board)
+        return (player1_file, player2_file, board, player1_color, player2_color)
     else:
-        return (player2_file, player1_file, board)
+        return (player2_file, player1_file, board, player1_color, player2_color)
 
 def cleanup_move_string(move):
     return move.lower().replace(" ","").replace("\n","")
@@ -72,7 +74,7 @@ def is_move_legal(move,board):
     castling = ["e1c1"]
     pawn_promotion_rank5 = ["a5b","b5b","c5b","d5b","e5b","a5n","b5n","c5n","d5n","e5n","a5r","b5r","c5r","d5r","e5r","a5q","b5q","c5q","d5q","e5q"]
     move = move.uci()
-    print('Testing move: ', move)
+    #print('Testing move: ', move)
     if board.piece_at(chess.SQUARES[chess.SQUARE_NAMES.index(move[:2])]).symbol() == 'P':
         if (chess.Move.from_uci(move) in board.legal_moves) and (not move in pawn_double__moves) and is_move_within_5x5_borders(move):
             return True
@@ -124,7 +126,7 @@ def process_move(file, file_position, board):
         if file.tell() == file_position:
             time.sleep(FILE_POLLING_INTERVAL)
         else:
-            print("Move raw string:", move)
+            #print("Move raw string:", move)
             move = cleanup_move_string(move)
             try:
                 move = chess.Move.from_uci(move)
@@ -162,39 +164,69 @@ def game_loop(whites_file, blacks_file, board, GUI_enabled = False, window = Non
         if GUI_enabled:
             window.replaceBoard(board)
             window.reload()
-        blacks_file.write('White played ' + str(move) + os.linesep)
-        blacks_file.flush()
-        blacks_file_position = blacks_file.tell()
+
         if is_checkmate(board):
             winner = 'White'
+            blacks_file.write('White played ' + str(move) + ' ' + str(winner) + ' wins' + os.linesep)
+            whites_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
             break
         elif disqualified:
             winner = 'Black'
+            blacks_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
             break
         elif is_draw(board):
             winner = None
+            blacks_file.write('White played ' + str(move) + ' ' + str(winner) + ' wins' + os.linesep)
+            whites_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
             break
+        else:
+            blacks_file.write('White played ' + str(move) + os.linesep)
+            blacks_file.flush()
+            blacks_file_position = blacks_file.tell()
+
         (blacks_file,move,disqualified) = process_move(blacks_file, blacks_file_position, board)
+
         if GUI_enabled:
             window.replaceBoard(board)
             window.reload()
         else:
             print(board)
-        whites_file.write('Black played ' + str(move) + os.linesep)
-        whites_file.flush()
-        whites_file_position = whites_file.tell()
+        
         if is_checkmate(board):
             winner = 'Black'
+            whites_file.write('Black played ' + str(move) + ' ' + str(winner) + ' wins' + os.linesep)
+            blacks_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
         elif disqualified:
             winner = 'White'
+            whites_file.write(str(winner) + ' wins' + os.linesep)
+            blacks_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
         elif is_draw(board):
             winner = None
+            whites_file.write('Black played ' + str(move) + ' ' + str(winner) + ' wins' + os.linesep)
+            blacks_file.write(str(winner) + ' wins' + os.linesep)
+            whites_file.flush()
+            blacks_file.flush()
             game_finished = True
+        else:
+            whites_file.write('Black played ' + str(move) + os.linesep)
+            whites_file.flush()
+            whites_file_position = whites_file.tell()
     return (winner, whites_file, blacks_file)
         
 
@@ -227,29 +259,72 @@ def run_GUI(app, window):
 
     app.exec_()
 
-def run_game(GUI_enabled=False, window=None):
+def wait_for_read_confirmation(file):
+    confirmation_read = False
+    file_position = file.tell()
+    while not confirmation_read:
+        file = reload_reader(file)
+        reply = file.readline()
+        if file.tell() == file_position or reply == '':
+            file.seek(file_position)
+            time.sleep(FILE_POLLING_INTERVAL)
+        else:
+            confirmation_read = True
+
+def update_scores(player1_wins, player2_wins, winner, player1_color, player2_color, output=False):
+    index = None
+    if winner == 'Black':
+        index = 1
+    else:
+        index = 0
+
+    if winner == player1_color:
+        player1_wins[index] += 1
+    else:
+        player2_wins[index] += 1
+
+    if output:
+        print('Player1 win count')
+        print('  White', player1_wins[0])
+        print('  Black', player1_wins[1])
+        print('Player2 win count')
+        print('  White', player2_wins[0])
+        print('  Black', player2_wins[1])
+
+    return (player1_wins, player2_wins)
+def run_game(GUI_enabled=False, window=None, nr_games=1):
     player1_file_name = 'player1.txt'
     player2_file_name = 'player2.txt'
-    (whites_file,blacks_file, board) = setup_new_game(player1_file_name, player2_file_name)
-    if GUI_enabled:
-        window.replaceBoard(board)
-        window.reload()
-    (winner, whites_file, blacks_file) = game_loop(whites_file, blacks_file, board, GUI_enabled, window)
-    print(str(winner) + ' wins')
-    whites_file.write(str(winner) + ' wins' + os.linesep)
-    whites_file.flush()
-    blacks_file.write(str(winner) + ' wins' + os.linesep)
-    blacks_file.flush()
-    whites_file.close()
-    blacks_file.close()
+    #Wins as White/Black
+    player1_wins = [0,0]
+    player2_wins = [0,0]
+    for game_nr in range(nr_games):
+        print('\nGame nr.', game_nr)
+        
+        (whites_file,blacks_file, board, player1_color, player2_color) = setup_new_game(player1_file_name, player2_file_name)
+        if GUI_enabled:
+            window.replaceBoard(board)
+            window.reload()
+        (winner, whites_file, blacks_file) = game_loop(whites_file, blacks_file, board, GUI_enabled, window)
+        print(str(winner) + ' wins')
 
+        (player1_wins, player2_wins) = update_scores(player1_wins, player2_wins, winner, player1_color, player2_color, output=True)
+
+        wait_for_read_confirmation(whites_file)
+        wait_for_read_confirmation(blacks_file)
+
+        whites_file.close()
+        blacks_file.close()
+        os.rename(player1_file_name, player1_file_name + 'game-' + str(game_nr) + '.txt')
+        os.rename(player2_file_name, player2_file_name + 'game-' + str(game_nr) + '.txt')
+        input('Press any key for next game...')
 def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     if GUI_ACTIVE:
         #QApplication doesn't like running on non-main Thread, so run game backend in different thread instead
         try:
-            _thread.start_new_thread(run_game, (True,window) )
+            _thread.start_new_thread(run_game, (True,window, NR_GAMES) )
         except Exception as e:
             print("Error: unable to start thread")
             print(e)
