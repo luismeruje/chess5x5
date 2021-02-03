@@ -11,7 +11,7 @@ python3 Manager.py
 ```
 
 ## Manager
-The Manager offers the following onfigurations which can be edited at the top of the manager.py file:
+The Manager offers the following configurations which can be edited at the top of the manager.py file:
 - NR_GAMES -> How many games to play
 - FILE_POLLING_INTERVAL -> How often to poll the file for changes. Time interval in seconds.
 - MAX_INFRACTIONS -> How many illegal moves before a player is disqualified.
